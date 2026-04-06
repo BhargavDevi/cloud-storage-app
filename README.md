@@ -9,7 +9,7 @@ A simple, production-deployed web application for uploading, sharing, and downlo
 - **Platform**: AWS EC2 — Asia Pacific (Mumbai)
 - **Instance**: t3.micro, Ubuntu Server 22.04 LTS
 - **Process Manager**: PM2
-- **Access**: `http://<EC2_PUBLIC_IP>:3000`
+- **Access**: `http://3.110.190.132:3000/`[Currently the instence is off]
 
 ---
 
