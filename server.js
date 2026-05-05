@@ -63,7 +63,10 @@ const upload = multer({ storage, fileFilter, limits: { fileSize: 10 * 1024 * 102
 
 // POST /upload — upload file, get back a share code
 app.post("/upload", upload.single("file"), (req, res) => {
-  if (!req.file) return res.status(400).json({ error: "No file uploaded." });
+  if (!req.file) {
+    console.log(`[UPLOAD] ❌ Failed — no file provided`);
+    return res.status(400).json({ error: "No file uploaded." });
+  }
 
   const code  = uniqueCode();
   const codes = loadCodes();
@@ -72,9 +75,20 @@ app.post("/upload", upload.single("file"), (req, res) => {
     filename:     req.file.filename,
     originalName: req.file.originalname,
     size:         req.file.size,
+    mimetype:     req.file.mimetype,
     uploadedAt:   new Date().toISOString()
   };
   saveCodes(codes);
+
+  console.log(`-----------------------------`);
+  console.log(`[UPLOAD] ✅ New File Uploaded!`);
+  console.log(`  📄 Name     : ${req.file.originalname}`);
+  console.log(`  📦 Size     : ${(req.file.size / 1024).toFixed(1)} KB`);
+  console.log(`  🗂️  Type     : ${req.file.mimetype}`);
+  console.log(`  🔑 Code     : ${code}`);
+  console.log(`  🌐 IP       : ${req.ip}`);
+  console.log(`  🕐 Time     : ${new Date().toISOString()}`);
+  console.log(`-----------------------------`);
 
   res.json({ message: "Uploaded!", code, filename: req.file.filename,
              originalName: req.file.originalname, size: req.file.size });
@@ -86,6 +100,8 @@ app.get("/files", (req, res) => {
   const list  = Object.entries(codes)
     .map(([code, info]) => ({ code, ...info }))
     .sort((a, b) => new Date(b.uploadedAt) - new Date(a.uploadedAt));
+
+  console.log(`[FILES] 📋 Listed ${list.length} file(s)`);
   res.json(list);
 });
 
@@ -93,16 +109,32 @@ app.get("/files", (req, res) => {
 app.get("/access/:code", (req, res) => {
   const code  = req.params.code.toUpperCase().trim();
   const codes = loadCodes();
-  if (!codes[code]) return res.status(404).json({ error: "Invalid code. No file found." });
+
+  if (!codes[code]) {
+    console.log(`[ACCESS] ❌ Invalid code: ${code}`);
+    return res.status(404).json({ error: "Invalid code. No file found." });
+  }
+
   const filePath = path.join(UPLOADS_DIR, codes[code].filename);
-  if (!fs.existsSync(filePath)) return res.status(404).json({ error: "File no longer exists." });
+  if (!fs.existsSync(filePath)) {
+    console.log(`[ACCESS] ❌ File missing on disk for code: ${code}`);
+    return res.status(404).json({ error: "File no longer exists." });
+  }
+
+  console.log(`[ACCESS] ✅ Code ${code} accessed — File: ${codes[code].originalName}`);
   res.json({ code, ...codes[code] });
 });
 
 // GET /download/:filename — download a file
 app.get("/download/:filename", (req, res) => {
   const filePath = path.join(UPLOADS_DIR, req.params.filename);
-  if (!fs.existsSync(filePath)) return res.status(404).json({ error: "File not found." });
+
+  if (!fs.existsSync(filePath)) {
+    console.log(`[DOWNLOAD] ❌ File not found: ${req.params.filename}`);
+    return res.status(404).json({ error: "File not found." });
+  }
+
+  console.log(`[DOWNLOAD] ⬇️  Downloading: ${req.params.filename}`);
   res.download(filePath);
 });
 
@@ -110,9 +142,16 @@ app.get("/download/:filename", (req, res) => {
 app.delete("/file/:code", (req, res) => {
   const code  = req.params.code.toUpperCase().trim();
   const codes = loadCodes();
-  if (!codes[code]) return res.status(404).json({ error: "Code not found." });
+
+  if (!codes[code]) {
+    console.log(`[DELETE] ❌ Code not found: ${code}`);
+    return res.status(404).json({ error: "Code not found." });
+  }
+
   const filePath = path.join(UPLOADS_DIR, codes[code].filename);
   if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
+  console.log(`[DELETE] 🗑️  Deleted file: ${codes[code].originalName} | Code: ${code}`);
+
   delete codes[code];
   saveCodes(codes);
   res.json({ message: "Deleted!" });
@@ -120,10 +159,19 @@ app.delete("/file/:code", (req, res) => {
 
 // ── Error Handler ─────────────────────────────────────────────
 app.use((err, req, res, next) => {
-  if (err instanceof multer.MulterError && err.code === "LIMIT_FILE_SIZE")
+  if (err instanceof multer.MulterError && err.code === "LIMIT_FILE_SIZE") {
+    console.log(`[ERROR] ❌ File too large`);
     return res.status(400).json({ error: "File too large! Max 10MB." });
-  if (err) return res.status(400).json({ error: err.message });
+  }
+  if (err) {
+    console.log(`[ERROR] ❌ ${err.message}`);
+    return res.status(400).json({ error: err.message });
+  }
   next();
 });
 
-app.listen(PORT, () => console.log(`✅ Server running at http://localhost:${PORT}`));
+app.listen(PORT, () => {
+  console.log(`✅ Server running at http://localhost:${PORT}`);
+  console.log(`📁 Files stored in: ${UPLOADS_DIR}`);
+  console.log(`🕐 Started at: ${new Date().toISOString()}`);
+});
